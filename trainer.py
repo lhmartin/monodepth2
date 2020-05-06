@@ -14,6 +14,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
+from data_helper import UnlabeledDataset, LabeledDataset
 
 import json
 
@@ -130,6 +131,22 @@ class Trainer:
         self.train_loader = DataLoader(
             train_dataset, self.opt.batch_size, True,
             num_workers=self.opt.num_workers, pin_memory=True, drop_last=True)
+
+
+        unlabeled_scene_index = np.arange(134)
+
+        # The scenes from 106 - 133 are labeled
+        # You should divide the labeled_scene_index into two subsets (training and validation)
+        test_set = np.array([125, 113, 117, 122, 133])
+        unlabeled_scene_index = np.delete(unlabeled_scene_index, test_set)
+
+        transform = torchvision.transforms.ToTensor()
+
+        unlabeled_trainset = UnlabeledDataset(image_folder=image_folder, scene_index=labeled_scene_index, first_dim='sample', transform=transform)
+        trainloader = torch.utils.data.DataLoader(unlabeled_trainset, batch_size=3, shuffle=False, num_workers=2)
+
+        self.train_loader = trainloader
+
         val_dataset = self.dataset(
             self.opt.data_path, val_filenames, self.opt.height, self.opt.width,
             self.opt.frame_ids, 4, is_train=False, img_ext=img_ext)
