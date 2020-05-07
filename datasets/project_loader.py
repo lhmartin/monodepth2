@@ -31,7 +31,7 @@ class ProjectDataset(MonoDataset):
                            [0, 0, 1, 0],
                            [0, 0, 0, 1]], dtype=np.float32)
 
-        self.full_res_shape = (312, 256)
+        self.full_res_shape = (256, 256)
         self.num_to_cam = { 0 : "CAM_BACK_LEFT",
                           1 : "CAM_BACK_RIGHT",
                           2 : "CAM_BACK",
@@ -70,7 +70,7 @@ class ProjectDataset(MonoDataset):
 
         unlabeled_scene_index = np.arange(134)
         # The scenes from 106 - 133 are labeled
-# You should divide the labeled_scene_index into two subsets (training and validation)
+        # You should divide the labeled_scene_index into two subsets (training and validation)
         test_set = np.array([125, 113, 117, 122, 133])
         scene_index = np.delete(unlabeled_scene_index, test_set)
         print(scene_index)
@@ -116,20 +116,26 @@ class ProjectDataset(MonoDataset):
 
 
         for i in self.frame_idxs:
-            #print( "i = ", i)
-            inputs[("color", i, 0)] = self.get_color(folder, index, "", do_flip, i)
+            inputs[("color", i, -1)] = self.get_color(folder, index, "", do_flip, i)
 
+
+
+        K = self.intrinsics[self.num_to_cam[index % 6]]
+        K = np.array(K)
         # adjusting intrinsics to match each scale in the pyramid
         for scale in range(self.num_scales):
-            K = self.K.copy()
+            K = K.copy()
 
             K[0, :] *= self.width // (2 ** scale)
             K[1, :] *= self.height // (2 ** scale)
 
+            inv_K = np.linalg.pinv(K)
+
+            inputs[("K", scale)] = torch.from_numpy(K)
+            inputs[("inv_K", scale)] = torch.from_numpy(inv_K)
+
         K = self.intrinsics[self.num_to_cam[index % 6]]
         K = np.array(K)
-
-
 
         inv_K = np.linalg.pinv(K)
 
