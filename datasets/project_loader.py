@@ -63,7 +63,7 @@ class ProjectDataset(MonoDataset):
                             [0.0, 881.63835671/4, 525.6185326/4, 0],
                             [0.0, 0.0, 1.0, 0],
                                          [0, 0, 0, 1]]}
-            
+
         transform = transforms.Compose(
                 [transforms.Resize([256, 256]),
                 transforms.ToTensor()])
@@ -76,8 +76,8 @@ class ProjectDataset(MonoDataset):
         print(scene_index)
         print(len(scene_index))
         if self.filenames == "val":
-            unlabeled_scene_index = test_set
-            
+            scene_index = test_set
+
         unlabeled_trainset = UnlabeledDataset(image_folder= "../data", scene_index=scene_index, first_dim='sample', transform=transform)
         loader = torch.utils.data.DataLoader(unlabeled_trainset, batch_size=1, shuffle=False, num_workers=2)
 
@@ -108,7 +108,7 @@ class ProjectDataset(MonoDataset):
         """
         inputs = {}
 
-     
+
         do_color_aug = self.is_train and random.random() > 0.5
         do_flip = self.is_train and random.random() > 0.5
 
@@ -128,15 +128,15 @@ class ProjectDataset(MonoDataset):
 
         K = self.intrinsics[self.num_to_cam[index % 6]]
         K = np.array(K)
-        
-       
-        
+
+
+
         inv_K = np.linalg.pinv(K)
 
         inputs[("K", 0)] = torch.from_numpy(K).float()
         inputs[("inv_K", 0)] = torch.from_numpy(inv_K).float()
 
-        
+
         color_aug = (lambda x: x)
 
         self.preprocess(inputs, color_aug)
@@ -162,7 +162,7 @@ class ProjectDataset(MonoDataset):
 
 
     def get_color(self, folder, frame_index, side, do_flip, dif):
-        
+
         black =  torch.Tensor(np.zeros((3,256,256), dtype=float))
         if frame_index == 97524:
             color = black
@@ -170,7 +170,7 @@ class ProjectDataset(MonoDataset):
             color = black
         elif int(int(frame_index//6 % 126)) == 1 and dif == -1:
             color = black
-        else:        
+        else:
             frame_index += 6*dif
             color = self.loader.dataset[frame_index//6][int(frame_index % 6)]
             #print(type(color))
@@ -186,5 +186,5 @@ class ProjectDataset(MonoDataset):
         return False
 
     def __len__(self):
-        
+
         return len(self.loader) * 6
