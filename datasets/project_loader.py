@@ -166,13 +166,13 @@ class ProjectDataset(MonoDataset):
         black =  torch.Tensor(np.zeros((3,256,256), dtype=float))
         if frame_index == 97524:
             color = black
-        elif int(int(frame_index//6 % 126)) == 0 and dif == 1:
+        elif int(int(frame_index//6 % 126)) == 125 and dif == 1:
             color = black
         elif int(int(frame_index//6 % 126)) == 1 and dif == -1:
             color = black
         else:        
             frame_index += 6*dif
-            color = self.loader.dataset[int(frame_index/6)][int(frame_index % 6)]
+            color = self.loader.dataset[frame_index//6][int(frame_index % 6)]
             #print(type(color))
 
 
