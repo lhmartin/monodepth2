@@ -10,10 +10,12 @@ import os
 import skimage.transform
 import numpy as np
 import PIL.Image as pil
+import random
 
 import torchvision
 import torch
 from data_helper import UnlabeledDataset, LabeledDataset
+from torchvision import transforms
 
 from .mono_dataset import MonoDataset
 
@@ -29,7 +31,7 @@ class ProjectDataset(MonoDataset):
                            [0, 0, 1, 0],
                            [0, 0, 0, 1]], dtype=np.float32)
 
-        self.full_res_shape = (306, 256)
+        self.full_res_shape = (312, 256)
         self.num_to_cam = { 0 : "CAM_BACK_LEFT",
                           1 : "CAM_BACK_RIGHT",
                           2 : "CAM_BACK",
@@ -37,19 +39,49 @@ class ProjectDataset(MonoDataset):
                           4 : "CAM_FRONT_RIGHT",
                           5 : "CAM_FRONT",
                           }
-
-        transform = torchvision.transforms.ToTensor()
+        self.intrinsics = {'CAM_FRONT_LEFT': [[879.03824732/5, 0.0, 613.17597314/5, 0],
+                            [0.0, 879.03824732/4, 524.14407205/4 , 0],
+                            [0.0, 0.0, 1.0, 0],
+                                         [0, 0, 0, 1]],
+                            'CAM_FRONT': [[882.61644117/5, 0.0, 621.63358525/5, 0],
+                            [0.0, 882.61644117/4, 524.38397862/4, 0],
+                            [0.0, 0.0, 1.0, 0],
+                                         [0, 0, 0, 1]],
+                            'CAM_FRONT_RIGHT': [[880.41134027/5, 0.0, 618.9494972/5, 0],
+                            [0.0, 880.41134027/4, 521.38918482/4, 0],
+                            [0.0, 0.0, 1.0, 0],
+                                         [0, 0, 0, 1]],
+                            'CAM_BACK_LEFT': [[881.28264688/4, 0.0, 612.29732111/5, 0],
+                            [0.0, 881.28264688/4, 521.77447199/4, 0],
+                            [0.0, 0.0, 1.0, 0],
+                                         [0, 0, 0, 1]],
+                            'CAM_BACK': [[882.93018422/5, 0.0, 616.45479905/5, 0],
+                            [0.0, 882.93018422/4, 528.27123027/4, 0],
+                            [0.0, 0.0, 1.0, 0],
+                                         [0, 0, 0, 1]],
+                            'CAM_BACK_RIGHT': [[881.63835671/5, 0.0, 607.66308183/5, 0],
+                            [0.0, 881.63835671/4, 525.6185326/4, 0],
+                            [0.0, 0.0, 1.0, 0],
+                                         [0, 0, 0, 1]]}
+            
+        transform = transforms.Compose(
+                [transforms.Resize([256, 256]),
+                transforms.ToTensor()])
 
         unlabeled_scene_index = np.arange(134)
         # The scenes from 106 - 133 are labeled
 # You should divide the labeled_scene_index into two subsets (training and validation)
         test_set = np.array([125, 113, 117, 122, 133])
-        unlabeled_scene_index = np.delete(unlabeled_scene_index, test_set)
+        scene_index = np.delete(unlabeled_scene_index, test_set)
+        print(scene_index)
+        print(len(scene_index))
+        if self.filenames == "val":
+            unlabeled_scene_index = test_set
+            
+        unlabeled_trainset = UnlabeledDataset(image_folder= "../data", scene_index=scene_index, first_dim='sample', transform=transform)
+        loader = torch.utils.data.DataLoader(unlabeled_trainset, batch_size=1, shuffle=False, num_workers=2)
 
-        unlabeled_trainset = UnlabeledDataset(image_folder="../../data", scene_index=unlabeled_scene_index, first_dim='sample', transform=transform)
-        trainloader = torch.utils.data.DataLoader(unlabeled_trainset, batch_size=1, shuffle=False, num_workers=2)
-
-        self.loader = trainloader
+        self.loader = loader
 
     def check_depth(self):
         raise NotImplementedError
@@ -76,21 +108,16 @@ class ProjectDataset(MonoDataset):
         """
         inputs = {}
 
-        print("CALLED __getitem__")
-
-        print("self.frame_idxs")
-        print(self.frame_idxs)
-
+     
         do_color_aug = self.is_train and random.random() > 0.5
         do_flip = self.is_train and random.random() > 0.5
 
         folder = ""
 
-        print("HERE")
 
         for i in self.frame_idxs:
-            print( "i = ", i)
-            inputs[("color", i, -1)] = self.get_color(folder, index + i * 6, "", do_flip)
+            #print( "i = ", i)
+            inputs[("color", i, 0)] = self.get_color(folder, index, "", do_flip, i)
 
         # adjusting intrinsics to match each scale in the pyramid
         for scale in range(self.num_scales):
@@ -99,16 +126,18 @@ class ProjectDataset(MonoDataset):
             K[0, :] *= self.width // (2 ** scale)
             K[1, :] *= self.height // (2 ** scale)
 
-            inv_K = np.linalg.pinv(K)
+        K = self.intrinsics[self.num_to_cam[index % 6]]
+        K = np.array(K)
+        
+       
+        
+        inv_K = np.linalg.pinv(K)
 
-            inputs[("K", scale)] = torch.from_numpy(K)
-            inputs[("inv_K", scale)] = torch.from_numpy(inv_K)
+        inputs[("K", 0)] = torch.from_numpy(K).float()
+        inputs[("inv_K", 0)] = torch.from_numpy(inv_K).float()
 
-        if do_color_aug:
-            color_aug = transforms.ColorJitter.get_params(
-                self.brightness, self.contrast, self.saturation, self.hue)
-        else:
-            color_aug = (lambda x: x)
+        
+        color_aug = (lambda x: x)
 
         self.preprocess(inputs, color_aug)
 
@@ -132,12 +161,19 @@ class ProjectDataset(MonoDataset):
         return inputs
 
 
-    def get_color(self, folder, frame_index, side, do_flip):
-        from torchvision import transforms
-        print("Frame index = ", frame_index)
-        print(frame_index/6)
-
-        color = self.loader.dataset[int(frame_index/6)][(frame_index % 6)]
+    def get_color(self, folder, frame_index, side, do_flip, dif):
+        
+        black =  torch.Tensor(np.zeros((3,256,256), dtype=float))
+        if frame_index == 97524:
+            color = black
+        elif int(int(frame_index//6 % 126)) == 0 and dif == 1:
+            color = black
+        elif int(int(frame_index//6 % 126)) == 1 and dif == -1:
+            color = black
+        else:        
+            frame_index += 6*dif
+            color = self.loader.dataset[int(frame_index/6)][int(frame_index % 6)]
+            #print(type(color))
 
 
         color = transforms.ToPILImage()(color)
@@ -150,6 +186,5 @@ class ProjectDataset(MonoDataset):
         return False
 
     def __len__(self):
-
-        print("CALLED __len__")
+        
         return len(self.loader) * 6

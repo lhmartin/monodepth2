@@ -113,8 +113,11 @@ class Trainer:
 
         # data
         datasets_dict = {"kitti": datasets.KITTIRAWDataset,
-                         "kitti_odom": datasets.KITTIOdomDataset}
-        self.dataset = datasets_dict[self.opt.dataset]
+                         "kitti_odom": datasets.KITTIOdomDataset,
+                         "project" : datasets.ProjectDataset}
+        
+        
+        self.dataset = datasets_dict["project"]
 
         fpath = os.path.join(os.path.dirname(__file__), "splits", self.opt.split, "{}_files.txt")
 
@@ -127,32 +130,20 @@ class Trainer:
 
         train_dataset = self.dataset(
             self.opt.data_path, train_filenames, self.opt.height, self.opt.width,
-            self.opt.frame_ids, 4, is_train=True, img_ext=img_ext)
+            self.opt.frame_ids, 0, is_train=True, img_ext=img_ext)
         self.train_loader = DataLoader(
             train_dataset, self.opt.batch_size, True,
             num_workers=self.opt.num_workers, pin_memory=True, drop_last=True)
 
 
-        unlabeled_scene_index = np.arange(134)
-
-        # The scenes from 106 - 133 are labeled
-        # You should divide the labeled_scene_index into two subsets (training and validation)
-        test_set = np.array([125, 113, 117, 122, 133])
-        unlabeled_scene_index = np.delete(unlabeled_scene_index, test_set)
-
-        transform = torchvision.transforms.ToTensor()
-
-        unlabeled_trainset = UnlabeledDataset(image_folder=image_folder, scene_index=labeled_scene_index, first_dim='sample', transform=transform)
-        trainloader = torch.utils.data.DataLoader(unlabeled_trainset, batch_size=3, shuffle=False, num_workers=2)
-
-        self.train_loader = trainloader
-
         val_dataset = self.dataset(
-            self.opt.data_path, val_filenames, self.opt.height, self.opt.width,
-            self.opt.frame_ids, 4, is_train=False, img_ext=img_ext)
+            self.opt.data_path, "val", self.opt.height, self.opt.width,
+            self.opt.frame_ids, 0, is_train=False, img_ext=img_ext)
+        
         self.val_loader = DataLoader(
             val_dataset, self.opt.batch_size, True,
             num_workers=self.opt.num_workers, pin_memory=True, drop_last=True)
+        
         self.val_iter = iter(self.val_loader)
 
         self.writers = {}
@@ -216,7 +207,11 @@ class Trainer:
         self.set_train()
 
         for batch_idx, inputs in enumerate(self.train_loader):
-
+            
+            # print("batch idx = ", batch_idx)
+            # for k,v in inputs.items():
+            #    print(k)
+            
             before_op_time = time.time()
 
             outputs, losses = self.process_batch(inputs)
@@ -262,6 +257,7 @@ class Trainer:
             outputs = self.models["depth"](features[0])
         else:
             # Otherwise, we only feed the image with frame_id 0 through the depth encoder
+           
             features = self.models["encoder"](inputs["color_aug", 0, 0])
             outputs = self.models["depth"](features)
 
@@ -393,6 +389,7 @@ class Trainer:
 
                 cam_points = self.backproject_depth[source_scale](
                     depth, inputs[("inv_K", source_scale)])
+              
                 pix_coords = self.project_3d[source_scale](
                     cam_points, inputs[("K", source_scale)], T)
 
