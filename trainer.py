@@ -138,7 +138,7 @@ class Trainer:
 
         val_dataset = self.dataset(
             self.opt.data_path, "val", self.opt.height, self.opt.width,
-            self.opt.frame_ids, 0, is_train=False, img_ext=img_ext)
+            self.opt.frame_ids, self.opt.num_scales, is_train=False, img_ext=img_ext)
 
         self.val_loader = DataLoader(
             val_dataset, self.opt.batch_size, True,
